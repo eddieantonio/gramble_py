@@ -114,6 +114,8 @@ class TestParsers(unittest.TestCase):
         result = list(self.var_transducer(self.input_gloss, Counter()))
         self.assertEqual(result, [({"surf": "blepton"}, {'gl': ''})])
 
+        with self.assertRaises(KeyError):
+            bad_var = VariableParser(self.symbol_table, "FOO")
 
 if __name__ == '__main__':
     unittest.main()

@@ -57,7 +57,7 @@ class ConcatParser(Parser):
             results = new_results
             if max_results > 0:
                 results = results[:max_results]
-        return results
+        yield from results
 
 class AlternationParser(Parser):
     ''' An AlternationParser represents the choice between multiple parsers,
@@ -83,7 +83,7 @@ class AlternationParser(Parser):
             results += child(input, hist, max_results, randomize)
             if max_results > 0 and len(results) >= max_results:
                return results[:max_results]
-        return results
+        yield from results
 
 class VariableParser(Parser):
     ''' A VariableParser allows us to refer to other named parsers in the grammar.
@@ -98,7 +98,9 @@ class VariableParser(Parser):
     too many times and should not recurse any further. '''
 
     def __init__(self, symbol_table, var, max_recursion=3):
-        assert(var in symbol_table)
+
+        if var not in symbol_table:
+            raise KeyError(f"Variable {var} not defined")
         self.symbol_table, self.var = symbol_table, var
         self.counter = Counter([self.var])
         self.max_recursion = max_recursion
@@ -107,5 +109,5 @@ class VariableParser(Parser):
         assert(self.var in self.symbol_table)
         if hist[self.var] >= self.max_recursion:
             return []
-        return self.symbol_table[self.var](input, hist + self.counter,
+        yield from self.symbol_table[self.var](input, hist + self.counter,
                                                    max_results, randomize)
