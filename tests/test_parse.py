@@ -35,6 +35,21 @@ class TestParsers(unittest.TestCase):
         
         self.ambiguous = AlternationParser([self.transduce, self.transduce2])
         
+        self.overloaded_ambiguous = (((self.blep + self.jump) |
+                                    (self.ble + self.run +
+                                            self.p + self.tr)) +
+                                    (self.ton + self.sg3))
+
+        self.symbol_table = {}
+        self.symbol_table["ROOT"] = self.blep + self.jump
+        self.symbol_table["SUFFIX"] = self.ton + self.sg3
+
+        self.root = VariableParser(self.symbol_table, "ROOT")
+        self.suffix = VariableParser(self.symbol_table, "SUFFIX")
+
+        self.var_transducer = self.root + self.suffix
+
+
     def tearDown(self):
         pass
 
@@ -71,10 +86,8 @@ class TestParsers(unittest.TestCase):
         result = list(self.transduce(self.input_surf, Counter()))
         self.assertEqual(result, [({"gl": "[jump][3sg]"}, {'surf': ''})])
 
-
         result = list(self.nested_transduce(self.input_surf, Counter()))
         self.assertEqual(result, [({"gl": "[jump][3sg]"}, {'surf': ''})])
-
 
         result = list(self.transduce(self.input_gloss, Counter()))
         self.assertEqual(result, [({"surf": "blepton"}, {'gl': ''})])
@@ -85,6 +98,20 @@ class TestParsers(unittest.TestCase):
         ])
 
         result = list(self.ambiguous(self.input_gloss, Counter()))
+        self.assertEqual(result, [({"surf": "blepton"}, {'gl': ''})])
+
+    def test_overloading(self):
+        result = list(self.overloaded_ambiguous(self.input_surf, Counter()))
+        self.assertEqual(result, [({"gl": "[jump][3sg]"}, {'surf': ''}),
+                                ({"gl": "[run][tr][3sg]"}, {'surf': ''})
+        ])
+
+    def test_variables(self):
+
+        result = list(self.var_transducer(self.input_surf, Counter()))
+        self.assertEqual(result, [({"gl": "[jump][3sg]"}, {'surf': ''})])
+
+        result = list(self.var_transducer(self.input_gloss, Counter()))
         self.assertEqual(result, [({"surf": "blepton"}, {'gl': ''})])
 
 

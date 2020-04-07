@@ -2,9 +2,19 @@ import random
 from collections import Counter, OrderedDict
 
 
-MAX_RECURSION_DEPTH = 3
+class Parser:
 
-class LiteralParser:
+    def __call__(self, input, hist, max_results=-1, randomize=False):
+        raise NotImplementedError()
+
+    def __add__(self, other):
+        return ConcatParser([self, other])
+
+    def __or__(self, other):
+        return AlternationParser([self, other])
+
+
+class LiteralParser(Parser):
     ''' A LiteralParser recognizes a particular sequence of characters at the 
     beginning of an input. '''
 
@@ -22,7 +32,7 @@ class LiteralParser:
         yield OrderedDict(), result
 
 
-class ConcatParser:
+class ConcatParser(Parser):
     ''' A ConcatParser represents a sequence of parsers, e.g. a sequence of parsers
     to detect particular morphemes or morphemes of a given class. '''
 
@@ -49,7 +59,7 @@ class ConcatParser:
                 results = results[:max_results]
         return results
 
-class AlternationParser:
+class AlternationParser(Parser):
     ''' An AlternationParser represents the choice between multiple parsers,
     e.g. between four lines of a paradigm, between 500 different roots, etc. 
     
@@ -75,7 +85,7 @@ class AlternationParser:
                return results[:max_results]
         return results
 
-class VariableParser:
+class VariableParser(Parser):
     ''' A VariableParser allows us to refer to other named parsers in the grammar.
     So if we've defined a parser named "VROOT" in grammar g, the parser
     VariableParser(g, "VROOT") would refer to that parser. 
@@ -87,15 +97,15 @@ class VariableParser:
     exceeds some set threshold for an identifier, that's a sign we've recursed 
     too many times and should not recurse any further. '''
 
-    def __init__(self, grammar, var):
-        assert(var in grammar.tables)
-        self.grammar, self.var = grammar, var
+    def __init__(self, symbol_table, var, max_recursion=3):
+        assert(var in symbol_table)
+        self.symbol_table, self.var = symbol_table, var
         self.counter = Counter([self.var])
+        self.max_recursion = max_recursion
 
     def __call__(self, input, hist, max_results=-1, randomize=False):
-        assert(self.grammar[self.var].parser != None)
-        if hist[self.var] >= MAX_RECURSION_DEPTH:
+        assert(self.var in self.symbol_table)
+        if hist[self.var] >= self.max_recursion:
             return []
-        return self.grammar[self.var].parser(input, hist + self.counter,
+        return self.symbol_table[self.var](input, hist + self.counter,
                                                    max_results, randomize)
-
