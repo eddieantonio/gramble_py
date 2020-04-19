@@ -5,7 +5,7 @@ A simple tabular language for making rule-based linguistic parser/generators
 
 The primary goal of Grable is to allow subject-matter experts (e.g. teachers, non-computational linguists) to make rule-based parsers and generators more easily.
 
-When making rule-based linguistic artifacts (e.g., morphological parsers or generators), there is often a disconnect between the expression of linguistic knowledge by a subject-matter expert (who in our experience is often working in a spreadsheet) and the linguist-programmer (who translates that domain knowledge into a linguistic programming language like XFST).  Even when the linguist-programmer is working directly in a text programming language, we notice that they often use tabs/spaces to try to turn the code into a spreadsheet itself.  Tabular organization of some sort is inherent in this domain (or how humans conceptually organize that domain into programs).
+When making rule-based linguistic artifacts (e.g., morphological parsers or generators), there is often a disconnect between the expression of linguistic knowledge by a subject-matter expert (who in our experience is often working in a spreadsheet) and the linguist-programmer (who translates that domain knowledge into a linguistic programming language like XFST).  Even when the linguist-programmer is working directly in a text programming language, we notice that they often use tabs/spaces to try to turn the code into a spreadsheet-like format, so that elemnets that play the same role are aligned in columns.  Tabular organization of some sort is inherent in this domain (or, at least, how humans conceptually organize this domain into programs).
 
 Grable is a formalism for the *direct* interpretation of spreadsheets as grammars, so that the specification of a grammar in tabular form is also the interpreted code that parses/generates this grammar.  
 
@@ -24,6 +24,8 @@ Grable is a formalism for the *direct* interpretation of spreadsheets as grammar
 | | VSTEM | i | -3SG.DIST |
 
 The above tables are both the description of the grammar and the code that, properly interpreted, converts "hamx'idux" to "eat-3SGMED" or vice-versa.
+
+The semantics of this language are based on "parser combinators", a classic trick from the functional programming world to allow the expression of a grammar in a high-level programming language that is simultaneously the executable code that parses that grammar.  (Specifically, we're using the "typed parser combinator" algorithm introduced in Littell et al. 2016, that generalizes parsing to dictionary-to-dictionary transduction.)  Grable is a way of expressing these combinators in tabular form, making the specification of a grammar resemble even more closely the informal spreadsheets that lexicographers and morphologists use themselves.
 
 ## Grable in comparison to other linguistic programming languages
 
