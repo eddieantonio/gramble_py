@@ -1,0 +1,11 @@
+{
+  "name": "gramble",
+  "version": "0.0.1",
+  "description": "Typescript interpreter for Gramble language",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "author": "Patrick Littell",
+  "license": "MIT"
+}
