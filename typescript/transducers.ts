@@ -239,10 +239,10 @@ export class GRecord implements ITransducer, Iterable<GEntry> {
         return false;
     }
 
-    public get(tier: string): GEntry {
+    public get(tier: string): string {
         for (const entry of this) {
             if (entry.key.text == tier) {
-                return entry;
+                return entry.value.text;
             }
         }
         throw new Error("Key not found: " + tier);
