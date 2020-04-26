@@ -50,9 +50,8 @@ class TableCompiler:
     ''' Compiles a Stanza into a Table '''
 
     def __init__(self, stanza, symbol_table):
-
-
-
+        pass
+    
 class Stanza:
     ''' A Stanza is a series of spreadsheet rows that are interpreted as a unit '''
 

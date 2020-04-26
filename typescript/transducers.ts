@@ -53,6 +53,7 @@ export class GCell extends GPosition {
      */
     public get text(): string { return this._text; }
 
+    public toString(): string { return this._text; }
     /**
      * Creates an instance of GCell.
      * 
@@ -70,6 +71,10 @@ export class GCell extends GPosition {
         this._text += text;
     }
 
+    public map(f: (s: string) => string): GCell {
+        return new GCell(f(this.text), this._sheet, this._row, this._col);
+    }
+
     public clone(): GCell {
         return new GCell(this._text, this._sheet, this._row, this._col);
     }
@@ -77,9 +82,7 @@ export class GCell extends GPosition {
 
 
 interface ITransducer {
-
-    parse(input: GRecord, symbol_table: SymbolTable): [GRecord, GRecord][];
-
+    parse(input: GTable, symbol_table: SymbolTable): GTable;
 }
 
 /**
@@ -106,7 +109,27 @@ export class GEntry implements ITransducer {
         return new GEntry(this._key.clone(), this._value.clone());
     }
 
-    public parse(input: GRecord, symbol_table: SymbolTable): [GRecord, GRecord][] {
+    public map_key(f: (s: string) => string): GEntry {
+        return new GEntry(this._key.map(f), this._value);
+    }
+
+    public map_value(f: (s: string) => string): GEntry {
+        return new GEntry(this._key, this._value.map(f));
+    }
+
+    public is_incomplete(): boolean {
+        return this._key.text.startsWith("_") && this._value.text.length > 0;
+    }
+
+    public toString(): string {
+        return this._key.toString() + ":" + this._value.toString();
+    }
+
+    public concat(s: string) {
+        return new GEntry(this.key.clone(), new GCell(this.value.text + s));
+    }
+
+    public parse(input: GTable, symbol_table: SymbolTable): GTable {
 
         if (this.key.text == 'var') {
             // we're a VariableParser
@@ -114,40 +137,47 @@ export class GEntry implements ITransducer {
             return parser.parse(input, symbol_table);
         }
 
-        if (!input.has(this._key.text)) {
-            // the input doesn't contain our tier, we're a generator
-            var output = new GRecord();
-            output.push(new GEntry(this.key, this.value));
-            return [ [output, input ]];
-        }
+        var result_table = new GTable();
 
-        // the input *does* contain our tier, so parse.
+        outer_loop: for (const input_record of input) {
+            var result_record = new GRecord();
+            var my_tier_found = false;
 
-        var output = new GRecord();
-        var remnant = new GRecord();
-        // the result is going to be each entry in the input, with the target string
-        // parsed off every tier of the appropriate name.  if any tier with a matching 
-        // name doesn't begin with this, then the whole thing fails.
-        for (const entry of input.entries) {
-            if (entry.key.text != this.key.text) {
-                // not the tier we're looking for, add it to the remnant and move on
-                remnant.push(entry);
-                continue;
+            // the result is going to be each entry in the input, with the target string
+            // parsed off every tier of the appropriate name.  if any tier with a matching 
+            // name doesn't begin with this, then the whole thing fails.
+            for (const entry of input_record) {
+
+                if (entry.key.text == this.key.text) {
+                    result_record.push(entry.concat(this.value.text));
+                    my_tier_found = true;
+                    continue;
+                }
+
+                if (entry.key.text != "_" + this.key.text) {
+                    result_record.push(entry);
+                    continue;  // not what we're looking for, move along 
+                }
+
+                if (!entry.value.text.startsWith(this.value.text)) {
+                    // parse failed! 
+                    continue outer_loop;
+                }
+
+                const remnant_str = entry.value.text.slice(this.value.text.length);
+                const remnant_cell = new GCell(remnant_str);
+                const remnant_entry = new GEntry(entry.key, remnant_cell);
+                result_record.push(remnant_entry);
             }
 
-            if (!entry.value.text.startsWith(this.value.text)) {
-                // parse failed! return the empty list
-                return [];
+            if (!my_tier_found) {
+                result_record.push(this.clone());
             }
 
-            const remnant_str = entry.value.text.slice(this.value.text.length);
-            const remnant_cell = new GCell(remnant_str);
-            const remnant_entry = new GEntry(this.key, remnant_cell);
-            output.push(this);
-            remnant.push(remnant_entry);
+            result_table.push(result_record);
         }
-
-        return [ [output, remnant] ];
+        
+        return result_table;
     }
 }
 
@@ -161,7 +191,7 @@ export class GEntry implements ITransducer {
  * in order.
  */
 
-export class GRecord implements ITransducer {
+export class GRecord implements ITransducer, Iterable<GEntry> {
 
     private _entries : GEntry[] = [];
 
@@ -169,8 +199,39 @@ export class GRecord implements ITransducer {
         return this._entries;
     }
 
+    public [Symbol.iterator](): Iterator<GEntry> {
+        return this._entries[Symbol.iterator]();
+    }
+
+    public map_key(f: (s: string) => string): GRecord {
+        const result = new GRecord();
+        for (const entry of this) {
+            result.push(entry.map_key(f));
+        }
+        return result;
+    }
+
+    public is_incomplete(): boolean {
+        for (const entry of this) {
+            if (entry.is_incomplete()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public trim(): GRecord {
+        var result = new GRecord();
+        for (const entry of this) {
+            if (!entry.key.text.startsWith("_")) {
+                result.push(entry);
+            }
+        }
+        return result;
+    }
+
     public has(tier: string): boolean {
-        for (const entry of this._entries) {
+        for (const entry of this) {
             if (entry.key.text == tier) {
                 return true;
             }
@@ -179,7 +240,7 @@ export class GRecord implements ITransducer {
     }
 
     public get(tier: string): GEntry {
-        for (const entry of this._entries) {
+        for (const entry of this) {
             if (entry.key.text == tier) {
                 return entry;
             }
@@ -189,45 +250,125 @@ export class GRecord implements ITransducer {
 
     public clone(): GRecord {
         var result = new GRecord();
-        for (const entry of this._entries) {
+        for (const entry of this) {
             result.push(entry.clone());
         }
         return result;
-    }
-
-    public combine(other: GRecord) {
-        var result = this.clone();
-        for (const other_entry of other.entries) {
-            if (result.has(other_entry.key.text)) {
-                var entry_to_change = result.get(other_entry.key.text);
-                entry_to_change.value.append(other_entry.value.text);
-                continue;
-            }
-            result.push(other_entry.clone());
-        }
     }
 
     public push(entry: GEntry): void {
         this._entries.push(entry);
     }
 
-    public parse(input: GRecord, symbol_table: SymbolTable): [GRecord, GRecord][] {
-        return [];
+    public parse(input: GTable, symbol_table: SymbolTable): GTable {
+    
+        for (const child of this) {
+            const new_results = new GTable();
+            for (const result2 of child.parse(input, symbol_table)) {
+                new_results.push(result2);
+            }
+            input = new_results;
+        }
+        return input;
     }
 
+    public toString(): string {
+        return this._entries.join(", ");
+    }
 }
 
+export function make_entry(key: string, value: string): GEntry {
+    return new GEntry(new GCell(key), new GCell(value));
+}
 
-export class GTable implements ITransducer {
+export function make_one_entry_record(key: string, value:string) {
+    return make_record([[key,value]]);
+}
+
+export function make_one_record_table(entries: [string, string][]): GTable {
+    var result = new GTable();
+    result.push(make_record(entries));
+    return result;
+}
+
+/**
+ * Convenience function for making a GRecord from [key,value] pairs.
+ * @param entries Array of [key,value] pairs.
+ * @returns record 
+ */
+export function make_record(entries: [string, string][]): GRecord {
+    var result = new GRecord();
+    for (const [key, value] of entries) {
+        const entry = new GEntry(new GCell(key), new GCell(value));
+        result.push(entry);
+    }
+    return result;
+}
+
+export class GTable implements ITransducer, Iterable<GRecord> {
 
     private _records : GRecord[] = [];
+
+    public get records(): GRecord[] {
+        return this._records;
+    }
+
+    public [Symbol.iterator](): Iterator<GRecord> {
+        return this._records[Symbol.iterator]();
+    }
 
     public push(record: GRecord) {
         this._records.push(record);
     }
 
-    public parse(input: GRecord, symbol_table: SymbolTable): [GRecord, GRecord][] {
-        return [];
+    public get length(): number {
+        return this._records.length;
+    }
+
+    public map_key(f: (s: string) => string): GTable {
+        const result = new GTable();
+        for (const child of this) {
+            result.push(child.map_key(f));
+        }
+        return result;
+    }
+
+    public parse(input: GTable, symbol_table: SymbolTable): GTable {
+        var results = new GTable();
+        for (const child of this) {
+            for (const result of child.parse(input, symbol_table)) {
+                results.push(result);
+            }
+        }
+        return results;
+    }
+
+    /**
+     * This is the main function that interfaces will call; it takes an
+     * undoctered input table (e.g. with input tiers just being strings like "text"
+     * rather than "_text") and, at the end, discards results with unconsumed input.
+     * 
+     * @param input 
+     * @param symbol_table 
+     * @returns parse 
+     */
+    public full_parse(input: GTable, symbol_table: SymbolTable): GTable {
+
+        // add _ to the beginning of each tier string in the input
+        input = input.map_key(function(s: string) { return "_" + s; });
+        console.log("input = "+input);
+        var results = new GTable();
+
+        for (const result of this.parse(input, symbol_table)) {
+            if (!result.is_incomplete()) {
+                results.push(result.trim());
+            }
+        }
+        return results;
+    }
+
+    public toString(): string {
+        return this._records.join("\n");
     }
 }
 
