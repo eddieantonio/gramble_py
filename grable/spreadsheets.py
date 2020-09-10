@@ -2,7 +2,7 @@ import csv
 import os
 
 def csv_iterator(filename):
-    with open('tests/test.csv', 'r', newline='', encoding='utf-8') as fin:
+    with open(filename, 'r', newline='', encoding='utf-8') as fin:
         yield from enumerate(csv.reader(fin))
 
 def is_line_empty(line):
