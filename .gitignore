@@ -130,3 +130,11 @@ dmypy.json
 
 # Typescript/Javascript compilation
 typescript/dist
+
+# VSCode Project settings
+.vscode/
+
+# Eclipse Project settings
+.project
+.settings
+.pydevproject
