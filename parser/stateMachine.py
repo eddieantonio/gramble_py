@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from util import StringDict, Gen, BitSet
-from tapes import MultiTapeOutput, Tape, StringTape, RenamedTape, \
+from .util import StringDict, Gen, BitSet
+from .tapes import MultiTapeOutput, Tape, StringTape, RenamedTape, \
                   TapeCollection, Token, ANY_CHAR, NO_CHAR
 
 from typing import Final, Optional, List, Dict, Tuple, Callable
@@ -561,11 +561,13 @@ def Uni(*children: State) -> State:
 # Simple main for initial debugging
 
 def debug_main():
-    text: Callable[[str], State] = Literalizer("text")
-    grammar: State = text("hello")
+    tier: str = "text"
+    target_text: str = "hello"
+    text: Callable[[str], State] = Literalizer(tier)
+    grammar: State = text(target_text)
     outputs: List[StringDict] = list(grammar.generate())
     assert len(outputs) == 1, "Should have 1 result."
-    print(outputs, file=sys.stderr)
+    assert outputs == [{tier: target_text}], f"Should have '{target_text}' on tier '{tier}'"
 
 if __name__ == "__main__":
     debug_main()

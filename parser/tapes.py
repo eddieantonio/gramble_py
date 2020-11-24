@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from util import StringDict, Gen, BitSet
+from .util import StringDict, Gen, BitSet
 
 from typing import Final, Optional, List, Dict
 from abc import ABC, abstractmethod
