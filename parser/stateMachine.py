@@ -4,7 +4,7 @@ from .util import StringDict, Gen, BitSet
 from .tapes import MultiTapeOutput, Tape, StringTape, RenamedTape, \
                   TapeCollection, Token, ANY_CHAR, NO_CHAR
 
-from typing import Final, Optional, List, Dict, Tuple, Callable
+from typing import Final, Optional, List, Dict, Tuple, Callable, TypeVar
 from abc import ABC, abstractmethod
 
 import sys
@@ -160,8 +160,7 @@ class State(ABC):
                 tape: Tape, 
                 target: Token, 
                 symbolStack: CounterStack) -> Gen[Tuple[Tape, Token, bool, State]]:
-        """
-        non-deterministic Query
+        """ non-deterministic Query
         
         The workhorse function of the parser, taking a <tape, char> pair and
         trying to match it to a transition (e.g., matching it to the next
@@ -435,7 +434,7 @@ class TrivialState(State):
                 tape: Tape, 
                 target: Token, 
                 symbolStack: CounterStack) -> Gen[Tuple[Tape, Token, bool, State]]:
-        pass
+        yield from ()
 
 
 class BinaryState(State):
@@ -449,7 +448,7 @@ class BinaryState(State):
     def __init__(self, child1: State, child2: State) -> None:
         self.child1 = child1
         self.child2 = child2
-        # super.__init__()
+        super().__init__()
     
     def collectVocab(self, tapes: Tape, stateStack: List[str]) -> None:
         self.child1.collectVocab(tapes, stateStack)
@@ -530,6 +529,67 @@ class UnionState(BinaryState):
         yield from self.child2.dQuery(tape, target, symbolStack)
 
 
+Gen_T = TypeVar('Gen_T')
+
+def iterPriorityUnion(iter1: Gen[Gen_T], iter2: Gen[Gen_T]) -> Gen[Gen_T]:
+    """
+    Convenience function that takes two generators, and yields from the second
+    only if it can't yield from the first.  This is handy in situations like the
+    implementation of join, where if we yielded from both we would constantly be
+    yielding the same states.
+    """
+    yieldedAlready: bool = False
+    for output in iter1:
+        yield output
+        yieldedAlready = True
+    if not yieldedAlready:
+        yield from iter2
+
+
+class JoinState(BinaryState):
+    """
+    The JoinState implements the natural join (in the relational algebra sense)
+    for two automata. This is a fundamental operation in the parser, as we
+    implement parsing as a traversal of a corresponding join state.  You can
+    think of join(X,Y) as yielding from the intersection of X and Y on tapes
+    that they share, and the product on tapes that they don't share.
+
+    The algorithm is simplified by the fact that join(X, Y) can be implemented
+    the union of the left and right semijoins (or, put another way, the left
+    semijoin of (X,Y) and the left semijoin of (Y,X)).  The left semijoin (X,Y)
+    just consists of querying X, then taking the result of that and querying Y,
+    and yielding the result of that.
+
+    Because the ordinary union of these would lead to the same states twice, we
+    use the priority union instead.
+    """
+    def ndQueryLeft(self,
+                    tape: Tape,
+                    target: Token,
+                    c1: State,
+                    c2: State,
+                    symbolStack: CounterStack) -> Gen[Tuple[Tape, Token, bool, State]]:
+        """ Left semijoin of (c1, c2) """
+        for c1tape, c1target, c1matched, c1next in c1.dQuery(tape, target, symbolStack):
+            if c1tape.numTapes == 0:
+                # c1 contained a ProjectionState that hides the original tape;
+                # move on without asking c2 to match anything.
+                yield (c1tape, c1target, c1matched, JoinState(c1next, c2))
+            
+            for c2tape, c2target, c2matched, c2next in c2.dQuery(c1tape, c1target, symbolStack):
+                yield (c2tape, c2target, c1matched or c2matched, JoinState(c1next, c2next))
+    
+    def ndQuery(self,
+                tape: Tape, 
+                target: Token, 
+                symbolStack: CounterStack) -> Gen[Tuple[Tape, Token, bool, State]]:
+        leftJoin: Gen[Tuple[Tape, Token, bool, State]]
+        rightJoin: Gen[Tuple[Tape, Token, bool, State]]
+        leftJoin = self.ndQueryLeft(tape, target, self.child1, self.child2, symbolStack)
+        rightJoin = self.ndQueryLeft(tape, target, self.child2, self.child1, symbolStack)
+        yield from iterPriorityUnion(leftJoin, rightJoin)
+
+
 SymbolTable = Dict[str, State]
 
 
@@ -556,6 +616,15 @@ def Uni(*children: State) -> State:
     if len(children) == 1:
         return children[0]
     return UnionState(children[0], Uni(*children[1:]))
+
+def Join(child1: State, child2: State) -> State:
+    return JoinState(child1, child2)
+
+def Any(tier: str) -> State:
+    return AnyCharState(tier)
+
+def Empty():
+    return TrivialState()
 
 
 # Simple main for initial debugging
